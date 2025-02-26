@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blog Admin Panel</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 200px;
+            resize: vertical;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .webhook-section {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .status-message {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .blog-list {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .blog-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border-left: 4px solid #3498db;
+        }
+        .blog-item h3 {
+            margin-top: 0;
+        }
+        .blog-meta {
+            font-size: 0.9em;
+            color: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Blog Admin Panel</h1>
+        
+        <div id="post-form">
+            <label for="title">Blog Title:</label>
+            <input type="text" id="title" placeholder="Enter blog title">
+            
+            <label for="content">Blog Content:</label>
+            <textarea id="content" placeholder="Write your blog post here..."></textarea>
+            
+            <button id="publish-btn">Publish Post</button>
+            
+            <div id="status-message" class="status-message" style="display: none;"></div>
+        </div>
+        
+        <div class="webhook-section">
+            <h2>Webhook Configuration</h2>
+            <label for="webhook-url">External Webhook URL (to notify):</label>
+            <input type="text" id="webhook-url" placeholder="https://webhook-test.com/your-unique-id">
+            
+            <button id="save-webhook-btn">Save Webhook URL</button>
+            <button id="test-webhook-btn">Test Webhook</button>
+            
+            <div id="webhook-status" class="status-message" style="display: none;"></div>
+        </div>
+        
+        <div class="blog-list">
+            <h2>Your Blog Posts</h2>
+            <div id="blog-list-container">
+                <p>Loading your posts...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const apiUrl = 'http://localhost:3000';
+        
+        // Function to publish a new blog post
+        async function publishPost() {
+            const title = document.getElementById('title').value.trim();
+            const content = document.getElementById('content').value.trim();
+            const statusMessage = document.getElementById('status-message');
+            
+            if (!title || !content) {
+                showStatus(statusMessage, 'Please fill in both title and content fields.', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${apiUrl}/posts`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        title,
+                        content,
+                        date: new Date().toISOString()
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to publish post');
+                }
+                
+                const result = await response.json();
+                
+                // Clear form fields
+                document.getElementById('title').value = '';
+                document.getElementById('content').value = '';
+                
+                showStatus(statusMessage, 'Blog post published successfully!', 'success');
+                
+                // Refresh the blog list
+                fetchBlogPosts();
+            } catch (error) {
+                console.error('Error publishing post:', error);
+                showStatus(statusMessage, 'Failed to publish blog post. Please try again.', 'error');
+            }
+        }
+        
+        // Function to save webhook URL
+        async function saveWebhookUrl() {
+            const webhookUrl = document.getElementById('webhook-url').value.trim();
+            const webhookStatus = document.getElementById('webhook-status');
+            
+            if (!webhookUrl) {
+                showStatus(webhookStatus, 'Please enter a webhook URL.', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${apiUrl}/webhook-config`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url: webhookUrl })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to save webhook URL');
+                }
+                
+                showStatus(webhookStatus, 'Webhook URL saved successfully!', 'success');
+            } catch (error) {
+                console.error('Error saving webhook URL:', error);
+                showStatus(webhookStatus, 'Failed to save webhook URL. Please try again.', 'error');
+            }
+        }
+        
+        // Function to test webhook
+        async function testWebhook() {
+            const webhookStatus = document.getElementById('webhook-status');
+            
+            try {
+                const response = await fetch(`${apiUrl}/test-webhook`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to test webhook');
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus(webhookStatus, 'Webhook test successful!', 'success');
+                } else {
+                    showStatus(webhookStatus, 'Webhook test failed: ' + result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error testing webhook:', error);
+                showStatus(webhookStatus, 'Failed to test webhook. Please try again.', 'error');
+            }
+        }
+        
+        // Function to fetch and display blog posts
+        async function fetchBlogPosts() {
+            try {
+                const response = await fetch(`${apiUrl}/posts`);
+                if (!response.ok) {
+                    throw new Error('Failed to fetch blog posts');
+                }
+                
+                const posts = await response.json();
+                const blogListContainer = document.getElementById('blog-list-container');
+                
+                if (posts.length === 0) {
+                    blogListContainer.innerHTML = '<p>No blog posts available yet.</p>';
+                    return;
+                }
+                
+                blogListContainer.innerHTML = '';
+                
+                // Sort posts by date descending
+                posts.sort((a, b) => new Date(b.date) - new Date(a.date));
+                
+                posts.forEach(post => {
+                    const postDate = new Date(post.date).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
+                    const postElement = document.createElement('div');
+                    postElement.className = 'blog-item';
+                    postElement.innerHTML = `
+                        <h3>${post.title}</h3>
+                        <div class="blog-meta">Published on ${postDate}</div>
+                        <p>${post.content.substring(0, 100)}${post.content.length > 100 ? '...' : ''}</p>
+                    `;
+                    
+                    blogListContainer.appendChild(postElement);
+                });
+            } catch (error) {
+                console.error('Error fetching blog posts:', error);
+                const blogListContainer = document.getElementById('blog-list-container');
+                blogListContainer.innerHTML = '<p>Failed to load blog posts. Please try again later.</p>';
+            }
+        }
+        
+        // Helper function to display status messages
+        function showStatus(element, message, type) {
+            element.textContent = message;
+            element.className = `status-message ${type}`;
+            element.style.display = 'block';
+            
+            // Hide message after 5 seconds
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 5000);
+        }
+        
+        // Add event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('publish-btn').addEventListener('click', publishPost);
+            document.getElementById('save-webhook-btn').addEventListener('click', saveWebhookUrl);
+            document.getElementById('test-webhook-btn').addEventListener('click', testWebhook);
+            
+            // Initialize webhook URL from localStorage if available
+            const savedWebhookUrl = localStorage.getItem('webhookUrl');
+            if (savedWebhookUrl) {
+                document.getElementById('webhook-url').value = savedWebhookUrl;
+            } else {
+                // Set the default webhook URL from the query
+                document.getElementById('webhook-url').value = 'https://webhook-test.com/fa51d213429ec38778931aa2e0c268be';
+            }
+            
+            // Fetch blog posts
+            fetchBlogPosts();
+        });
+    </script>
+</body>
+</html>
